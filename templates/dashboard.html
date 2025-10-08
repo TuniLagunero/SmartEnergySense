@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SmartEnergySense Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <h1>⚡ SmartEnergySense Dashboard</h1>
+  <div class="chart-container">
+    <canvas id="powerChart"></canvas>
+  </div>
+  <h2 id="prediction">Predicted Next Usage: —</h2>
+
+  <script>
+    let chart;
+    async function updateChart() {
+      const res = await fetch('/data');
+      const data = await res.json();
+      const labels = data.map(d => d.timestamp);
+      const power = data.map(d => d.power);
+
+      if (!chart) {
+        const ctx = document.getElementById('powerChart').getContext('2d');
+        chart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Power Consumption (W)',
+              data: power,
+              borderWidth: 2,
+              borderColor: 'blue'
+            }]
+          },
+          options: {
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+      } else {
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = power;
+        chart.update();
+      }
+
+      const pred = await fetch('/predict');
+      const predData = await pred.json();
+      document.getElementById("prediction").innerText = 
+        `Predicted Next Usage: ${predData.predicted_power} W`;
+    }
+
+    setInterval(updateChart, 3000);
+  </script>
+</body>
+</html>
