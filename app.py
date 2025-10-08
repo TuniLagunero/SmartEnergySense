@@ -1,37 +1,53 @@
-from flask import Flask, render_template, jsonify, request
-from datetime import datetime
-import random
+from flask import Flask, render_template, jsonify
+import random, threading, time
 
 app = Flask(__name__)
 
-# store latest readings (dummy in-memory database)
-data_log = []
+latest_data = {"current": 0, "voltage": 0, "power": 0}
+data_history = []  # store last 30 readings for chart display
+
+
+def simulate_iot_data():
+    global latest_data, data_history
+    while True:
+        current = round(random.uniform(0.2, 2.0), 2)   # amperes
+        voltage = 220
+        power = round(current * voltage, 2)
+
+        # simple "AI-ready" prediction model (for demo)
+        predicted = round(power * random.uniform(0.95, 1.05), 2)
+
+        latest_data = {
+            "current": current,
+            "voltage": voltage,
+            "power": power,
+            "predicted": predicted
+        }
+
+        data_history.append(power)
+        if len(data_history) > 30:
+            data_history.pop(0)
+
+        time.sleep(2)
+
+
+threading.Thread(target=simulate_iot_data, daemon=True).start()
+
 
 @app.route('/')
-def dashboard():
+def index():
     return render_template('dashboard.html')
+
 
 @app.route('/data')
 def get_data():
-    return jsonify(data_log[-20:])  # send last 20 data points
+    avg_power = round(sum(data_history) / len(data_history), 2) if data_history else 0
+    return jsonify({
+        "latest": latest_data,
+        "history": data_history,
+        "avg_power": avg_power
+    })
 
-@app.route('/upload', methods=['POST'])
-def upload_data():
-    content = request.get_json()
-    content['timestamp'] = datetime.now().strftime("%H:%M:%S")
-    data_log.append(content)
-    if len(data_log) > 100:
-        data_log.pop(0)
-    return jsonify({"status": "received"})
-
-@app.route('/predict')
-def predict_usage():
-    if not data_log:
-        return jsonify({"predicted_power": 0})
-    recent = [d['power'] for d in data_log[-5:]]
-    avg_power = sum(recent) / len(recent)
-    predicted = round(avg_power * random.uniform(0.9, 1.1), 2)
-    return jsonify({"predicted_power": predicted})
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000)

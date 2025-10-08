@@ -1,55 +1,89 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>SmartEnergySense Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/static/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <h1>⚡ SmartEnergySense Dashboard</h1>
-  <div class="chart-container">
-    <canvas id="powerChart"></canvas>
+
+  <div class="stats">
+    <div class="card">
+      <h3>Current</h3>
+      <p><span id="current">--</span> A</p>
+    </div>
+    <div class="card">
+      <h3>Voltage</h3>
+      <p><span id="voltage">--</span> V</p>
+    </div>
+    <div class="card">
+      <h3>Power</h3>
+      <p><span id="power">--</span> W</p>
+    </div>
+    <div class="card">
+      <h3>Predicted Power</h3>
+      <p><span id="predicted">--</span> W</p>
+    </div>
   </div>
-  <h2 id="prediction">Predicted Next Usage: —</h2>
+
+  <div class="summary">
+    <h3>Average Power: <span id="avgPower">--</span> W</h3>
+    <p>Status: <span id="status" class="status">--</span></p>
+  </div>
+
+  <canvas id="powerChart" width="400" height="200"></canvas>
 
   <script>
-    let chart;
-    async function updateChart() {
+    const ctx = document.getElementById('powerChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: Array(30).fill(''),
+        datasets: [{
+          label: 'Power (W)',
+          data: [],
+          borderColor: '#1e88e5',
+          backgroundColor: 'rgba(30,136,229,0.2)',
+          borderWidth: 2,
+          tension: 0.3
+        }]
+      },
+      options: {
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+
+    async function fetchData() {
       const res = await fetch('/data');
       const data = await res.json();
-      const labels = data.map(d => d.timestamp);
-      const power = data.map(d => d.power);
 
-      if (!chart) {
-        const ctx = document.getElementById('powerChart').getContext('2d');
-        chart = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: [{
-              label: 'Power Consumption (W)',
-              data: power,
-              borderWidth: 2,
-              borderColor: 'blue'
-            }]
-          },
-          options: {
-            scales: { y: { beginAtZero: true } }
-          }
-        });
+      document.getElementById('current').textContent = data.latest.current;
+      document.getElementById('voltage').textContent = data.latest.voltage;
+      document.getElementById('power').textContent = data.latest.power;
+      document.getElementById('predicted').textContent = data.latest.predicted;
+      document.getElementById('avgPower').textContent = data.avg_power;
+
+      chart.data.datasets[0].data = data.history;
+      chart.update();
+
+      const statusEl = document.getElementById('status');
+      if (data.avg_power < 200) {
+        statusEl.textContent = 'Low';
+        statusEl.style.color = 'green';
+      } else if (data.avg_power < 300) {
+        statusEl.textContent = 'Optimal';
+        statusEl.style.color = 'orange';
       } else {
-        chart.data.labels = labels;
-        chart.data.datasets[0].data = power;
-        chart.update();
+        statusEl.textContent = 'High';
+        statusEl.style.color = 'red';
       }
-
-      const pred = await fetch('/predict');
-      const predData = await pred.json();
-      document.getElementById("prediction").innerText = 
-        `Predicted Next Usage: ${predData.predicted_power} W`;
     }
 
-    setInterval(updateChart, 3000);
+    fetchData();
+    setInterval(fetchData, 2000);
   </script>
 </body>
 </html>
